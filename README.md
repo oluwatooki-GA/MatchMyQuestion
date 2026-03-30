@@ -8,9 +8,7 @@
 
 A full-stack web application that uses vector embeddings and semantic search to help students find relevant past exam questions instantly.
 
-### Demo
-
-![MatchMyQuestion Demo](assets/demo.mp4)
+[Live Demo](https://price-compare-ng-frontend.onrender.com) • [API](https://price-compare-ng-backend.onrender.com/api-docs)
 
 </div>
 
