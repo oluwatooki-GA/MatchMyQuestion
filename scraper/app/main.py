@@ -1,5 +1,4 @@
 from app.commands.scraper_commands import scraper_app, scrape
-from app.commands.database_commands import db_app, setup_db, save_results_to_db
 from app.commands.qdrant_commands import qdrant_app, upload_to_qdrant
 from app.config.constants import DEFAULT_STORAGE_FOLDER, RESULTS_FILENAME
 import typer
@@ -8,39 +7,32 @@ from pathlib import Path
 app = typer.Typer(help="""
 📚 Question CLI Application
 
-A comprehensive tool to manage, query, and upload question-answer pairs with embeddings to Qdrant, or local files. The CLI supports various operations including database setup, data scraping, Qdrant uploading, and more.
+A tool to scrape questions and upload them to Qdrant for semantic search.
 
  Features:
 
-1. Database Setup & Management:
-   - Create and manage database tables for questions.
-   - Save question-answer pairs to the database from a variety of sources.
+1. Scraping:
+   - Extract question-answer pairs from myschool.ng
 
-2. Scraping:
-   - Extract and manage question-answer pairs from structured or semi-structured sources.
+2. Qdrant Uploading:
+   - Upload embeddings of question-answer pairs to Qdrant
 
-3. Qdrant Uploading:
-   - Upload embeddings of question-answer pairs to a Qdrant instance for efficient querying.
-
-4. Local Data Management:
-   - Save question-answer pairs to files for offline use.
+3. Local Data Management:
+   - Save question-answer pairs to JSON files for backup
 
  Usage:
 
 - Use the `--help` option with any command to get specific details, e.g., `python app.py <command> --help`.
 
  Example Commands:
-- `setup-db` - Initialize the database for storing question-answer pairs.
-- `scrape` - Scrape question-answer pairs from specified sources.
-- `qdrant-upload` - Upload questions with embeddings to Qdrant.
-- `query` - Query questions and find similar matches based on embeddings.
-
-Tip: Refer to the README for detailed examples and advanced configurations.
+- `scrape` - Scrape question-answer pairs to JSON files
+- `upload` - Upload JSON data to Qdrant
+- `run-all` - Run the complete pipeline: scrape and upload
 
 """)
 
 
-@app.command(help="Run the complete pipeline: setup-db, scrape, db-save, and qdrant-upload.")
+@app.command(help="Run the complete pipeline: scrape and upload to Qdrant.")
 def run_all(
     folder: str = typer.Option(
         DEFAULT_STORAGE_FOLDER,
@@ -52,7 +44,7 @@ def run_all(
         'dev',
         "--environment",
         "-e",
-        help="Environment to use: 'dev' or 'prod'. Default is 'dev'."
+        help="Environment: 'dev' or 'prod'. Default is 'dev'."
     ),
     payload_indexes: list[str] = typer.Option(
         ["subject", "year"],
@@ -68,34 +60,21 @@ def run_all(
     )
 ):
     """
-    Run the complete pipeline: setup database, scrape data, save to database, and upload to Qdrant.
+    Run the complete pipeline: scrape data and upload to Qdrant.
     """
-    typer.secho("🚀 Starting complete pipeline...\n", fg=typer.colors.CYAN)
+    typer.secho(f"🚀 Starting complete pipeline in {environment} environment...\n", fg=typer.colors.CYAN)
 
-    # Step 1: Setup database
-    typer.secho("Step 1/4: Setting up database...", fg=typer.colors.CYAN)
-    setup_db(environment=environment)
-
-    # Step 2: Scrape data
-    typer.secho("\nStep 2/4: Scraping data...", fg=typer.colors.CYAN)
+    # Step 1: Scrape data
+    typer.secho("Step 1/2: Scraping data...", fg=typer.colors.CYAN)
     scrape(folder=folder, auto=True)
 
-    # Step 3: Save to database
-    typer.secho("\nStep 3/4: Saving to database...", fg=typer.colors.CYAN)
-    input_file = str(RESULTS_FILENAME)
-    save_results_to_db(
-        input_file=input_file,
-        folder=folder,
-        environment=environment
-    )
-
-    # Step 4: Upload to Qdrant
-    typer.secho("\nStep 4/4: Uploading to Qdrant...", fg=typer.colors.CYAN)
+    # Step 2: Upload to Qdrant
+    typer.secho("\nStep 2/2: Uploading to Qdrant...", fg=typer.colors.CYAN)
     upload_to_qdrant(
+        input_file=str(RESULTS_FILENAME),
+        folder=folder,
         collection_name=collection_name,
         payload_indexes=payload_indexes,
-        input_file=None,
-        folder=folder,
         environment=environment
     )
 
@@ -104,6 +83,5 @@ def run_all(
 
 if __name__ == '__main__':
     app.add_typer(scraper_app)
-    app.add_typer(db_app)
     app.add_typer(qdrant_app)
     app()

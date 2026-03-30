@@ -1,11 +1,8 @@
-from sqlmodel import SQLModel, Field
-from uuid import uuid4
-from pydantic import UUID4
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
-class Questions_And_Answers(SQLModel, table=True):
-    id: UUID4 = Field(default_factory=uuid4, primary_key=True)
+class Questions_And_Answers(BaseModel):
     question: str
     options: str | None = None
     correct_answer: Optional[str] = None
@@ -15,4 +12,4 @@ class Questions_And_Answers(SQLModel, table=True):
     exam_type: str
     year: str
     url: str
-    image_url: Optional[str] = None  # Optional image URL
+    image_url: Optional[str] = None

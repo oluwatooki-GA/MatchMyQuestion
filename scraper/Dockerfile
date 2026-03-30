@@ -2,21 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    make \
-    wget \
-    gnupg \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install sysem dependencies
+
 
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with timeout and retry
+RUN pip install --no-cache-dir --timeout=1000 --retries=10 -r requirements.txt
 
 # Copy source code
 COPY . .
