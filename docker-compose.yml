@@ -1,21 +1,47 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.dev
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.dev
+    depends_on:
+      - qdrant
+      - redis
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
   scraper:
     build:
       context: ./scraper
       dockerfile: Dockerfile
     volumes:
-      - ./scraper/results:/app/results
-    environment:
-      - DATABASE_HOSTNAME=db
-      - DATABASE_PORT=5432
-      - DATABASE_USERNAME=user
-      - DATABASE_PASSWORD=password
-      - DATABASE_NAME=matchmyquestion
-      - QDRANT_URL=http://qdrant:6333
-      - QDRANT_API_KEY=
-      - QDRANT_COLLECTION_NAME=questions
+      - ./scraper/results:/app/results0
+    env_file:
+      - .env.dev
     depends_on:
-      - db
       - qdrant
     networks:
       - app-network
@@ -29,35 +55,9 @@ services:
     networks:
       - app-network
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - db
-    networks:
-      - app-network
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=matchmyquestion
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - app-network
-
 networks:
   app-network:
     driver: bridge
 
 volumes:
-  postgres_data:
   qdrant_data:
