@@ -100,7 +100,7 @@ export default function Header() {
 
                   <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gray-100 rounded-lg border border-gray-300">
                     <p className="text-xs sm:text-sm text-gray-700">
-                      <strong>Under the hood:</strong> We use Qdrant vector database and sentence-transformers
+                      <strong>Under the hood:</strong> I use Qdrant vector database and sentence-transformers
                       for fast, accurate semantic search. Past exam questions from various subjects are indexed
                       and matched using cosine similarity.
                     </p>
