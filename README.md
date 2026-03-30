@@ -10,6 +10,7 @@ A full-stack web application that uses vector embeddings and semantic search to 
 
 [Live Demo](https://price-compare-ng-frontend.onrender.com) • [API](https://price-compare-ng-backend.onrender.com/api-docs)
 
+
 </div>
 
 ---
@@ -105,6 +106,50 @@ This starts all services:
 ```bash
 docker-compose down
 ```
+
+---
+
+## Scraping Exam Questions
+
+The scraper collects exam questions from myschool.ng and uploads them to Qdrant for semantic search.
+
+### Run Complete Pipeline (Scrape + Upload)
+
+```bash
+docker-compose run --rm scraper python -m app.main run-all
+```
+
+This will:
+1. Scrape questions from all subjects and save to JSON
+2. Upload questions to Qdrant with embeddings
+
+### Run Individual Commands
+
+**Scrape questions only:**
+```bash
+docker-compose run --rm scraper python -m app.main scrape --auto
+```
+
+**Upload existing data to Qdrant:**
+```bash
+docker-compose run --rm scraper python -m app.main upload \
+  --input-file final_result.json \
+  --collection-name questions
+```
+
+**Production environment (uses Qdrant Cloud):**
+```bash
+docker-compose run --rm scraper python -m app.main run-all -e prod
+```
+
+### Scraper Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--folder` | Where to save scraped results | `results` |
+| `--environment` | `dev` or `prod` | `dev` |
+| `--collection-name` | Qdrant collection name | `questions` |
+| `--payload-indexes` | Metadata fields to index | `subject,year` |
 
 ---
 
