@@ -132,10 +132,7 @@ docker-compose run --rm scraper python -m app.main scrape --auto
 
 **Upload existing data to Qdrant:**
 ```bash
-docker-compose run --rm scraper python -m app.main upload \
-  --input-file final_result.json \
-  --collection-name questions \
-  --payload-indexes subject year
+docker-compose run --rm scraper python -m app.main upload --input-file final_result.json --collection-name questions --payload-indexes subject --payload-indexes year
 ```
 
 **Production environment (uses Qdrant Cloud):**
