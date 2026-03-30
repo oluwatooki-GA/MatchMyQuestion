@@ -134,7 +134,8 @@ docker-compose run --rm scraper python -m app.main scrape --auto
 ```bash
 docker-compose run --rm scraper python -m app.main upload \
   --input-file final_result.json \
-  --collection-name questions
+  --collection-name questions \
+  --payload-indexes subject year
 ```
 
 **Production environment (uses Qdrant Cloud):**
