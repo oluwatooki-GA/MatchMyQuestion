@@ -8,8 +8,6 @@
 
 A full-stack web application that uses vector embeddings and semantic search to help students find relevant past exam questions instantly.
 
-[Live Demo](https://match-my-question.onrender.com/) • [API](https://matchmyquestion.onrender.com/api-docs)
-
 
 </div>
 
