@@ -71,6 +71,11 @@ async def qdrant_login_exception_handler(request: Request, exc: UnexpectedRespon
                             content={"message": f"Oops! couldn't connect to qdrant -Invalid Credentials"}, )
 
 
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
+
 @app.post(
     "/api/v1/search",
     response_model=SearchResult,
