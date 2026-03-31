@@ -1,4 +1,5 @@
 from typing import Annotated
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, status, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
@@ -15,7 +16,18 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.neural_search_service = NeuralSearcherService(settings.QDRANT_COLLECTION_NAME)
+    app.state.redis = Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True)
+    yield
+    app.state.neural_search_service.close()
+    app.state.redis.close()
+
+
+app = FastAPI(lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -37,18 +49,6 @@ async def log_requests(request: Request, call_next):
     logger.info(f"Request client: {request.client}")
     response = await call_next(request)
     return response
-
-
-@app.on_event("startup")
-def startup_event():
-    app.state.neural_search_service = NeuralSearcherService(settings.QDRANT_COLLECTION_NAME)
-    app.state.redis = Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
-
-
-@app.on_event("shutdown")
-def shutdown_event():
-    app.state.neural_search_service.close()
-    app.state.redis.close()
 
 
 def get_search_service() -> SearchService:
