@@ -21,10 +21,16 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.neural_search_service = NeuralSearcherService(settings.QDRANT_COLLECTION_NAME)
-    app.state.redis = Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True)
+    try:
+        app.state.redis = Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True)
+        await app.state.redis.ping()
+    except Exception:
+        app.state.redis = None
+        logger.warning("Redis not available, caching disabled")
     yield
     app.state.neural_search_service.close()
-    app.state.redis.close()
+    if app.state.redis:
+        app.state.redis.close()
 
 
 app = FastAPI(lifespan=lifespan)
