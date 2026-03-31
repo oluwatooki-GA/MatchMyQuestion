@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     @classmethod
     def load(cls, environment: str = "dev"):
-        env_path = Path(__file__).resolve().parent.parent.parent / f".env.{environment}"
+        # Look for .env file in project root (4 levels up from settings.py)
+        env_path = Path(__file__).resolve().parent.parent.parent.parent / f".env.{environment}"
         load_dotenv(env_path)
         return cls()

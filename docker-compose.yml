@@ -38,9 +38,9 @@ services:
       context: ./scraper
       dockerfile: Dockerfile
     volumes:
-      - ./scraper/results:/app/results0
-    env_file:
-      - .env.dev
+      - ./scraper/results:/app/results
+      - ./.env.dev:/app/.env.dev
+      - ./.env.prod:/app/.env.prod
     depends_on:
       - qdrant
     networks:

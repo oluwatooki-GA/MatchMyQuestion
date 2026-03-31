@@ -76,7 +76,7 @@ export default function ExamQuestion({ question }: { question: Question }) {
           <div className="mb-4 p-4 bg-gray-200 rounded-md border border-gray-400">
             <h4 className="font-semibold text-black mb-1">Correct Answer</h4>
             <p className="text-gray-800">
-              {question.correct_answer_letter}. {question.correct_answer}
+              {question.correct_answer_letter}. {question.correct_answer.replace(/Correct Answer:\s*/i, '').trim()}
             </p>
           </div>
         )}
