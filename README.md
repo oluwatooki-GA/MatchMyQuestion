@@ -8,7 +8,7 @@
 
 A full-stack web application that uses vector embeddings and semantic search to help students find relevant past exam questions instantly.
 
-[Live Demo](https://price-compare-ng-frontend.onrender.com) • [API](https://price-compare-ng-backend.onrender.com/api-docs)
+[Live Demo](https://match-my-question.onrender.com/) • [API](https://matchmyquestion.onrender.com/api-docs)
 
 
 </div>
@@ -27,6 +27,22 @@ MatchMyQuestion transforms how students prepare for exams by leveraging AI to fi
 - **Instant Answers**: View explanations and correct answers for each question
 - **Fast & Responsive**: Built with React + FastAPI for optimal performance
 - **Redis Caching**: Speeds up repeated queries
+
+---
+
+## Screenshots
+
+### Home Page
+
+![Home Page](assets/home%20page.png)
+
+### Subject Selection
+
+![Subject Selection](assets/options.png)
+
+### Search Results
+
+![Search Results](assets/results.png)
 
 ---
 
