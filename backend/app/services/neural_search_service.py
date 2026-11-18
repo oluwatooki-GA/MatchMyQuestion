@@ -72,16 +72,25 @@ class NeuralSearcherService:
             filters.append(models.Filter(must=conditions))
         return models.Filter(should=filters) if filters else None
 
-    def search(self, text: str, search_request: SearchRequest) -> list[dict]:
+    def search_with_scores(
+        self,
+        text: str,
+        search_request: SearchRequest,
+        limit: int | None = None,
+        score_threshold: float | None = None,
+    ) -> list[tuple[dict, float]]:
+        """Raw search: (formatted payload, similarity score) pairs. Used by the API and the eval harness."""
         search_result = self.qdrant_client.query_points(
             collection_name=self.collection_name,
             query=self.embed(text),
-            score_threshold=settings.SEARCH_SCORE_THRESHOLD,
+            score_threshold=settings.SEARCH_SCORE_THRESHOLD if score_threshold is None else score_threshold,
             query_filter=self.build_filter(search_request),
-            limit=settings.SEARCH_LIMIT,
+            limit=limit or settings.SEARCH_LIMIT,
         ).points
+        return [(self.format_payload(hit.payload or {}), hit.score) for hit in search_result]
 
-        return [self.format_payload(hit.payload or {}) for hit in search_result]
+    def search(self, text: str, search_request: SearchRequest) -> list[dict]:
+        return [payload for payload, _ in self.search_with_scores(text, search_request)]
 
     def close(self):
         self.qdrant_client.close()

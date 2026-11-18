@@ -40,3 +40,6 @@ dist/
 
 # Scraper results
 scraper/results/
+
+# Eval reports (keep only ones you name explicitly, e.g. git add -f eval/reports/baseline.json)
+backend/eval/reports/*.json
