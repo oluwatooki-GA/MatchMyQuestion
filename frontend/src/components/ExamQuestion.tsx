@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
+import DOMPurify from 'dompurify'
 import { BookOpen } from 'lucide-react'
 import type { Question } from '../types'
 
 export default function ExamQuestion({ question }: { question: Question }) {
-  const [explanationHTML, setExplanationHTML] = useState("")
   const [showExplanation, setShowExplanation] = useState(false)
 
-  useEffect(() => {
-    if (question.explanation_html) {
-      setExplanationHTML(question.explanation_html)
-    }
-  }, [question.explanation_html])
+  // explanation_html is scraped from third-party pages: sanitize before injecting it.
+  const explanationHTML = useMemo(
+    () => (question.explanation_html ? DOMPurify.sanitize(question.explanation_html) : ''),
+    [question.explanation_html]
+  )
 
   const toggleExplanation = () => {
     setShowExplanation((prev) => !prev)

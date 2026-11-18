@@ -57,12 +57,12 @@ export default function ExamQuestionFinder() {
 
   const isSubjectFullySelected = (subject: string) => {
     const subjectYears = currentSubjects[subject] || []
-    return [...new Set(selectedSubjects[currentSection]?.[subject] || [])]?.length === subjectYears.length
+    return [...new Set(selectedSubjects[currentSection]?.[subject] || [])].length === subjectYears.length
   }
 
   const isSubjectPartiallySelected = (subject: string) => {
     const subjectYears = currentSubjects[subject] || []
-    const selectedYears = [...new Set(selectedSubjects[currentSection]?.[subject] || [])] || []
+    const selectedYears = [...new Set(selectedSubjects[currentSection]?.[subject] || [])]
     return selectedYears.length > 0 && selectedYears.length < subjectYears.length
   }
 

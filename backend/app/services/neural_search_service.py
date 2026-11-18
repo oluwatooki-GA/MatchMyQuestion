@@ -1,70 +1,87 @@
-import json
-from typing import Optional
-from sentence_transformers import SentenceTransformer
-from qdrant_client import QdrantClient, models
-from app.config.settings import settings
-from app.schemas.search_schema import SearchRequest, SearchItem
 import ast
+from typing import Any
+
+from fastembed import TextEmbedding
+from loguru import logger
+from qdrant_client import QdrantClient, models
+
+from app.config.settings import settings
+from app.schemas.search_schema import SearchRequest
 
 
 class NeuralSearcherService:
-    def __init__(self, collection_name):
+    """Embeds the query with a small ONNX model (fastembed) and searches Qdrant.
+
+    fastembed runs the same all-MiniLM-L6-v2 weights as sentence-transformers,
+    but on onnxruntime instead of PyTorch, so it needs a fraction of the RAM.
+    Vectors are compatible with a collection built with sentence-transformers.
+    """
+
+    def __init__(self, collection_name: str):
         self.collection_name = collection_name
-        self.model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+        self.model = TextEmbedding(
+            model_name=settings.EMBEDDING_MODEL,
+            cache_dir=settings.EMBEDDING_CACHE_DIR,
+            threads=settings.EMBEDDING_THREADS,
+        )
         self.qdrant_client = QdrantClient(
             url=settings.QDRANT_URL,
-            api_key=settings.QDRANT_API_KEY)
+            api_key=settings.QDRANT_API_KEY or None,
+            timeout=settings.QDRANT_TIMEOUT,
+        )
 
     @staticmethod
-    def _get_match(val):
+    def _get_match(val: list[str]):
         if len(val) > 1:
             return models.MatchAny(any=val)
-        else:
-            return models.MatchValue(value=val[0])
+        return models.MatchValue(value=val[0])
 
     @staticmethod
-    def format_payload(payload: dict):
-        for key, value in payload.items():
-            if value == "N/A":
-                payload[key] = None
+    def _parse_options(options: Any) -> list | None:
+        if not options:
+            return None
+        if isinstance(options, list):
+            return options
+        try:
+            parsed = ast.literal_eval(options)
+        except (ValueError, SyntaxError):
+            logger.warning(f"Could not parse options payload: {options!r}")
+            return None
+        return parsed if isinstance(parsed, list) else None
 
-        if payload['options']:
-            payload['options'] = ast.literal_eval(payload['options'])
-            # payload['options'] = list(map(lambda x:x[:2] + x[2:].title(), payload['options']))
-            # payload['options_letters'] = [x[0] for x in payload['options']]
-        else:
-            payload['options_letters'] = None
-        if payload['correct_answer']:
-            payload['correct_answer_letter'] = payload['correct_answer'][-1]
-        else:
-            payload['correct_answer_letter'] = None
-
+    @classmethod
+    def format_payload(cls, payload: dict) -> dict:
+        payload = {k: (None if v == "N/A" else v) for k, v in payload.items()}
+        payload["options"] = cls._parse_options(payload.get("options"))
+        correct_answer = payload.get("correct_answer")
+        payload["correct_answer_letter"] = correct_answer.strip()[-1] if correct_answer and correct_answer.strip() else None
+        for key in ("year", "subject", "exam_type"):
+            if payload.get(key) is not None:
+                payload[key] = str(payload[key])
         return payload
 
-    def search(self, text: str, search_request: SearchRequest) -> list[dict] | None:
+    def embed(self, text: str) -> list[float]:
+        return next(iter(self.model.embed([text]))).tolist()
 
+    def build_filter(self, search_request: SearchRequest) -> models.Filter | None:
         filters = []
-        if search_request.search_items:
-            for search_item in search_request.search_items:
-                search_item: SearchItem
-                subject_filter = models.FieldCondition(key='subject', match=models.MatchValue(value=search_item.subject)) if search_item.subject else None
-                year_filter = models.FieldCondition(key='year', match=self._get_match(search_item.years)) if search_item.years else None
-                filter_item = models.Filter(must=[query for query in (subject_filter,year_filter) if query])
-                filters.append(filter_item)
-        query_filter = models.Filter(should=filters)
+        for search_item in search_request.search_items or []:
+            conditions = [models.FieldCondition(key="subject", match=models.MatchValue(value=search_item.subject))]
+            if search_item.years:
+                conditions.append(models.FieldCondition(key="year", match=self._get_match(search_item.years)))
+            filters.append(models.Filter(must=conditions))
+        return models.Filter(should=filters) if filters else None
 
-        vector = self.model.encode(text).tolist()
-
+    def search(self, text: str, search_request: SearchRequest) -> list[dict]:
         search_result = self.qdrant_client.query_points(
             collection_name=self.collection_name,
-            query=vector,
-            score_threshold=0.35,
-            query_filter=query_filter if filters else None,
-            limit=50,
+            query=self.embed(text),
+            score_threshold=settings.SEARCH_SCORE_THRESHOLD,
+            query_filter=self.build_filter(search_request),
+            limit=settings.SEARCH_LIMIT,
         ).points
 
-        payloads = [self.format_payload(hit.payload) for hit in search_result]
-        return payloads
+        return [self.format_payload(hit.payload or {}) for hit in search_result]
 
     def close(self):
         self.qdrant_client.close()

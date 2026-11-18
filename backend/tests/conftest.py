@@ -1,35 +1,12 @@
+import os
+
+os.environ.setdefault("QDRANT_URL", "http://localhost:6333")
+os.environ.setdefault("QDRANT_COLLECTION_NAME", "questions")
+
 import pytest
 from fastapi.testclient import TestClient
-from app.config.settings import settings
-from app.main import app
-from app.services.neural_search_service import NeuralSearcherService
 
-
-def get_subject_year_info() -> dict:
-    return {"Accounts - Principles of Accounts": ["2023", "2022", "2020", "2021", "2019"],
-            "Agricultural Science": ["2019", "2022", "2020", "2021", "2023"],
-            "Animal Husbandry": ["2021", "2020", "2019", "2023", "2022"],
-            "Biology": ["2021", "2022", "2019", "2020", "2023"],
-            "Catering Craft Practice": ["2022", "2018", "2020", "2019", "2021"],
-            "Chemistry": ["2019", "2022", "2023", "2021", "2020"],
-            "Christian Religious Knowledge (CRK)": ["2019", "2022", "2020", "2021", "2023"],
-            "Civic Education": ["2023", "2022", "2020", "2021", "2019"],
-            "Commerce": ["2020", "2023", "2019", "2021", "2022"],
-            "Computer Studies": ["2022", "2021", "2020", "2019", "2023"],
-            "Data Processing": ["2022", "2019", "2023", "2021", "2020"],
-            "Economics": ["2023", "2019", "2022", "2021", "2020"],
-            "English Language": ["2021", "2020", "2023", "2019", "2022"], "Fine Arts": ["2018"],
-            "French": ["2011", "2010"],
-            "Further Mathematics": ["2020", "2019", "2022", "2021", "2023"],
-            "Geography": ["2023", "2020", "2019", "2022", "2021"],
-            "Government": ["2022", "2019", "2020", "2021", "2023"], "History": ["2023", "2022", "2020", "2021", "2019"],
-            "Insurance": ["2017", "2014", "2016", "2018", "2015"],
-            "Islamic Religious Knowledge (IRK)": ["2020", "2019", "2021", "2022", "2023"],
-            "Literature in English": ["2021", "2022", "2023", "2020", "2019"],
-            "Marketing": ["2020", "2021", "2023", "2019", "2022"],
-            "Mathematics": ["2020", "2021", "2019", "2022", "2023"], "Music": ["2018"],
-            "Office Practice": ["2020", "2019", "2021"],
-            "Physical Education": ["2023", "2022"], "Physics": ["2023", "2022", "2021", "2019", "2020"]}
+from app.main import app, limiter
 
 
 class MockRedis:
@@ -39,33 +16,50 @@ class MockRedis:
     def get(self, name: str):
         return self.store.get(name)
 
-    def set(self, name: str, value: str,ex:int):
+    def set(self, name: str, value: str, ex: int):
         self.store[name] = value
 
     def close(self):
         self.store.clear()
 
 
+SAMPLE_PAYLOAD = {
+    "question": "What is the function of the lungs?",
+    "options": "['A. Digestion', 'B. Gas exchange', 'C. Excretion', 'D. Support']",
+    "correct_answer": "Correct Answer: Option B",
+    "explanation_html": "<p>The lungs exchange gases.</p>",
+    "explanation_text": "The lungs exchange gases.",
+    "subject": "Biology",
+    "exam_type": "WAEC",
+    "year": "2022",
+    "image_url": "N/A",
+}
+
+
+class FakeNeuralSearch:
+    def __init__(self, payloads=None):
+        self.payloads = [SAMPLE_PAYLOAD] if payloads is None else payloads
+        self.calls = []
+
+    def search(self, text, search_request):
+        from app.services.neural_search_service import NeuralSearcherService
+        self.calls.append((text, search_request))
+        return [NeuralSearcherService.format_payload(p) for p in self.payloads]
+
+    def close(self):
+        pass
+
+
 @pytest.fixture()
-def mock_redis():
-
-    return MockRedis
-
-
-@pytest.fixture()
-def mock_get_subject_year_info():
-    return get_subject_year_info
+def fake_search():
+    return FakeNeuralSearch()
 
 
 @pytest.fixture()
-def client(mock_redis,mock_get_subject_year_info):
-
-    app.state.subject_years = mock_get_subject_year_info()
-    app.state.redis = mock_redis()
-    app.state.neural_search_service = NeuralSearcherService(settings.QDRANT_COLLECTION_NAME)
-
-    client = TestClient(app,base_url="http://testserver/api/v1")
-
-    yield client
-
+def client(fake_search):
+    limiter.reset()
+    app.state.redis = MockRedis()
+    app.state.neural_search_service = fake_search
+    # No `with` block: the lifespan (real model + Qdrant) is not started.
+    yield TestClient(app, base_url="http://testserver/api/v1")
     app.state.redis.close()

@@ -1,109 +1,95 @@
 import pytest
-from app.schemas.search_schema import SearchResult
+from qdrant_client import models
+
+from app.schemas.search_schema import SearchItem, SearchRequest, SearchResult
+from app.services.neural_search_service import NeuralSearcherService
+from app.services.search_service import SearchService
+from tests.conftest import FakeNeuralSearch, MockRedis
 
 
-@pytest.mark.parametrize(
-    "search_data, expected_status_code",
-    [
-        ({"q": "Photosynthesis"}, 200),
-        ({"q": "Einstein's Theory"}, 200),
-        ({"q": "Python Programming"}, 200),
-    ]
-)
-def test_search_valid_text(client, search_data, expected_status_code):
-    response = client.post("/search", json=search_data)
-
-    assert response.status_code == expected_status_code
-
-    result = response.json()
-    assert "result" in result
-    assert len(result["result"]) > 0
-    SearchResult.model_validate(result)
-
-
-@pytest.mark.parametrize(
-    "search_data, expected_status_code",
-    [
-        (
-                {
-                    "q": "electrical conduction via gases",
-                    "search_items": [
-                        {
-                            "subject": "Physics",
-                            "years": ["2022", "2023"]
-                        }
-                    ]
-                },
-
-                200
-        ),
-        (
-                {
-                    "q": "What does the heart do?",
-                    "search_items": [
-                        {
-                            "subject": "Biology",
-                            "years": ["2022", "2023"]
-                        },
-                        {
-                            "subject": "Chemistry",
-                            "years": ["2021"]
-                        }
-                    ]
-                },
-                200
-        ),
-    ]
-)
-def test_search_valid_filtered(client, search_data, expected_status_code):
-    """Test searching with text, subject, and years."""
-    response = client.post("/search", json=search_data)
+def test_search_returns_formatted_results(client):
+    response = client.post("/search", json={"q": "lungs", "search_items": [{"subject": "Biology", "years": ["2022"]}]})
     assert response.status_code == 200
-
-    # Extract the result and validate
-    result = response.json()
-    assert "result" in result
-    assert len(result["result"]) > 0
-
-    SearchResult.model_validate(result)
+    result = SearchResult(**response.json()).result
+    assert result[0].options == ["A. Digestion", "B. Gas exchange", "C. Excretion", "D. Support"]
+    assert result[0].correct_answer_letter == "B"
+    assert result[0].image_url is None
 
 
-@pytest.mark.parametrize(
-    "search_data, expected_status_code",
-    [
-        (
-                {"q": "ssssssssssssssssssssssssssssssss"},
-                404
-        )
-    ]
-)
-def test_search_no_results(client, search_data, expected_status_code):
-    """Test searching for a text with no matching results."""
-
-    response = client.post("/search", json=search_data)
-
-    assert response.status_code == expected_status_code
-    result = response.json()
-    assert "detail" in result
+def test_search_no_results(client, fake_search):
+    fake_search.payloads = []
+    response = client.post("/search", json={"q": "nothing matches"})
+    assert response.status_code == 200
+    assert response.json() == {"result": None}
 
 
 @pytest.mark.parametrize(
-    "search_data, expected_status_code",
+    "body",
     [
-        (
-                {"q": "What is the Lungs Function",
-                 "search_items": [
-                     {
-                         "subject": ["Biology"],
-                         "years": "2022"
-                     }
-                 ]
-                 },
-                422,
-        )
-    ]
+        {},
+        {"q": ""},
+        {"q": "   "},
+        {"q": "x" * 1001},
+        {"q": "lungs", "search_items": [{"subject": ["Biology"], "years": "2022"}]},
+    ],
 )
-def test_search_invalid_subject_or_year(client, search_data, expected_status_code):
-    """Test searching with invalid subject or years."""
-    response = client.post("/search", json=search_data)
-    assert response.status_code == expected_status_code
+def test_search_invalid_requests(client, body):
+    assert client.post("/search", json=body).status_code == 422
+
+
+def test_cache_is_used_for_equivalent_queries(client, fake_search):
+    body1 = {"q": "Lungs  function", "search_items": [{"subject": "Biology", "years": ["2022", "2021"]}]}
+    body2 = {"q": "lungs function", "search_items": [{"subject": "Biology", "years": ["2021", "2022"]}]}
+    assert client.post("/search", json=body1).status_code == 200
+    assert client.post("/search", json=body2).status_code == 200
+    assert len(fake_search.calls) == 1
+
+
+def test_search_works_without_redis(fake_search):
+    service = SearchService(redis_client=None, neural_search_service=fake_search)
+    assert service.search(SearchRequest(q="lungs")).result
+
+
+def test_redis_failure_does_not_break_search(fake_search):
+    from redis import RedisError
+
+    class BrokenRedis(MockRedis):
+        def get(self, name):
+            raise RedisError("down")
+
+        def set(self, name, value, ex):
+            raise RedisError("down")
+
+    service = SearchService(redis_client=BrokenRedis(), neural_search_service=fake_search)
+    assert service.search(SearchRequest(q="lungs")).result
+
+
+@pytest.mark.parametrize(
+    "options, expected",
+    [("['A. x', 'B. y']", ["A. x", "B. y"]), (["A. x"], ["A. x"]), ("N/A", None), ("not a list(", None), (None, None)],
+)
+def test_format_payload_options(options, expected):
+    payload = NeuralSearcherService.format_payload({"question": "q", "options": options, "correct_answer": None})
+    assert payload["options"] == expected
+    assert payload["correct_answer_letter"] is None
+
+
+def test_build_filter():
+    service = NeuralSearcherService.__new__(NeuralSearcherService)
+    assert service.build_filter(SearchRequest(q="x")) is None
+    f = service.build_filter(SearchRequest(q="x", search_items=[
+        SearchItem(subject="Biology", years=["2022"]),
+        SearchItem(subject="Physics", years=["2021", "2022"]),
+        SearchItem(subject="Chemistry"),
+    ]))
+    assert len(f.should) == 3
+    assert isinstance(f.should[0].must[1].match, models.MatchValue)
+    assert isinstance(f.should[1].must[1].match, models.MatchAny)
+    assert len(f.should[2].must) == 1
+
+
+def test_rate_limit_uses_forwarded_ip(client):
+    for _ in range(5):
+        assert client.post("/search", json={"q": "a"}, headers={"X-Forwarded-For": "1.1.1.1"}).status_code == 200
+    assert client.post("/search", json={"q": "a"}, headers={"X-Forwarded-For": "1.1.1.1"}).status_code == 429
+    assert client.post("/search", json={"q": "a"}, headers={"X-Forwarded-For": "2.2.2.2"}).status_code == 200

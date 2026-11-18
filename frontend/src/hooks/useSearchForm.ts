@@ -40,7 +40,7 @@ export function useSearchForm() {
       throw new Error('Please enter a question, topic, or keyword to search.')
     }
 
-    if (Object.keys(selectedSubjects).length === 0) {
+    if (formattedSelectedSubjects.length === 0) {
       throw new Error('Please select at least one year from at least one subject')
     }
 
